@@ -17,6 +17,7 @@ include_directories(${Boost_INCLUDE_DIRS})
 link_directories(${Boost_LIBRARY_DIRS})
 
 find_package(catkin REQUIRED COMPONENTS
+  cmake_modules
   moveit_ros_planning
   moveit_ros_visualization
   rviz
@@ -48,6 +49,10 @@ if(NEW_YAMLCPP_FOUND)
 endif(NEW_YAMLCPP_FOUND)
 
 find_library(YAML yaml-cpp REQUIRED)
+
+find_package(TinyXML REQUIRED)
+
+include_directories(${TinyXML_INCLUDE_DIRS})
 
 catkin_package(
   INCLUDE_DIRS
@@ -93,6 +98,7 @@ target_link_libraries(${PROJECT_NAME}_tools
   ${catkin_LIBRARIES}
   ${Boost_LIBRARIES}
   ${QT_LIBRARIES}
+  ${TinyXML_LIBRARIES}
 )
 
 # Main Widgets Library - all screens (navigation options)
