@@ -9,7 +9,6 @@ endif()
 
 find_package(Boost REQUIRED system filesystem date_time program_options signals thread chrono)
 find_package(catkin REQUIRED COMPONENTS
-  cmake_modules
   moveit_core
   moveit_ros_perception
   pluginlib
@@ -30,8 +29,6 @@ find_package(Eigen3 REQUIRED)
 if(NOT EIGEN3_INCLUDE_DIRS)
   set(EIGEN3_INCLUDE_DIRS ${EIGEN3_INCLUDE_DIR})
 endif()
-
-find_package(TinyXML REQUIRED)
 
 generate_dynamic_reconfigure_options(
   "planning_scene_monitor/cfg/PlanningSceneMonitorDynamicReconfigure.cfg"
@@ -75,7 +72,6 @@ catkin_package(
 include_directories(${THIS_PACKAGE_INCLUDE_DIRS}
                     ${catkin_INCLUDE_DIRS}
                     ${Boost_INCLUDE_DIRS}
-                    ${TinyXML_INCLUDE_DIRS}
 )
 include_directories(SYSTEM
                     ${EIGEN3_INCLUDE_DIRS}
