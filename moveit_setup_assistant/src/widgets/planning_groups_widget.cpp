@@ -102,10 +102,14 @@ PlanningGroupsWidget::PlanningGroupsWidget(QWidget* parent, moveit_setup_assista
   QVBoxLayout* layout = new QVBoxLayout();
 
   // Top Label Area ------------------------------------------------
-  HeaderWidget* header =
-      new HeaderWidget("Planning Groups", "Create and edit planning groups for your robot based on joint collections, "
-                                          "link collections, kinematic chains and subgroups.",
-                       this);
+  HeaderWidget* header = new HeaderWidget(
+      "Planning Groups", "Create and edit planning groups for your robot based on joint collections, "
+                         "link collections, kinematic chains or subgroups. "
+                         "A planning group defines the set of (joint, link) pairs considered for planning "
+                         "and collision checking. "
+                         "Note: when adding a link to the group, its parent joint is added too and vice versa.\n"
+                         "Define individual groups for each subset of the robot you want to plan for.",
+      this);
   layout->addWidget(header);
 
   // Left Side ---------------------------------------------
@@ -287,8 +291,8 @@ void PlanningGroupsWidget::loadGroupsTree()
 void PlanningGroupsWidget::loadGroupsTreeRecursive(srdf::Model::Group& group_it, QTreeWidgetItem* parent)
 {
   // Fonts for tree
-  const QFont top_level_font("Arial", 11, QFont::Bold);
-  const QFont type_font("Arial", 11, QFont::Normal, QFont::StyleItalic);
+  const QFont top_level_font(QFont().defaultFamily(), 11, QFont::Bold);
+  const QFont type_font(QFont().defaultFamily(), 11, QFont::Normal, QFont::StyleItalic);
 
   QTreeWidgetItem* group;
 

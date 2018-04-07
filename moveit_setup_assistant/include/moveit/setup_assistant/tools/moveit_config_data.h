@@ -170,9 +170,11 @@ public:
 
   /// Flag indicating whether the URDF was loaded from .xacro format
   bool urdf_from_xacro_;
+  /// xacro arguments
+  std::string xacro_args_;
 
   /// URDF robot model
-  boost::shared_ptr<urdf::Model> urdf_model_;
+  urdf::ModelSharedPtr urdf_model_;
 
   // ******************************************************************************************
   // SRDF Data

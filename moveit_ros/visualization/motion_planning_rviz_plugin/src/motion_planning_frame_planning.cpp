@@ -138,7 +138,7 @@ void MotionPlanningFrame::computeExecuteButtonClicked()
   if (move_group_ && current_plan_)
   {
     ui_->stop_button->setEnabled(true);  // enable stopping
-    bool success = move_group_->execute(*current_plan_);
+    bool success = move_group_->execute(*current_plan_) == moveit::planning_interface::MoveItErrorCode::SUCCESS;
     onFinishedExecution(success);
   }
 }
@@ -152,7 +152,7 @@ void MotionPlanningFrame::computePlanAndExecuteButtonClicked()
   // to suppress a warning, we pass an empty state (which encodes "start from current state")
   move_group_->setStartStateToCurrentState();
   ui_->stop_button->setEnabled(true);
-  bool success = move_group_->move();
+  bool success = move_group_->move() == moveit::planning_interface::MoveItErrorCode::SUCCESS;
   onFinishedExecution(success);
   ui_->plan_and_execute_button->setEnabled(true);
 }
@@ -401,6 +401,8 @@ void MotionPlanningFrame::configureForPlanning()
   move_group_->setMaxVelocityScalingFactor(ui_->velocity_scaling_factor->value());
   move_group_->setMaxAccelerationScalingFactor(ui_->acceleration_scaling_factor->value());
   configureWorkspace();
+  if (static_cast<bool>(planning_display_))
+    planning_display_->dropVisualizedTrajectory();
 }
 
 void MotionPlanningFrame::remotePlanCallback(const std_msgs::EmptyConstPtr& msg)

@@ -3,6 +3,9 @@ project(moveit_setup_assistant)
 
 add_compile_options(-std=c++11)
 
+# definition needed for boost/math/constants/constants.hpp included by Ogre to compile
+add_definitions(-DBOOST_MATH_DISABLE_FLOAT128)
+
 if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
@@ -39,12 +42,9 @@ add_definitions(-DQT_NO_KEYWORDS)
 
 # Support new yaml-cpp API.
 find_package(PkgConfig)
-pkg_check_modules(NEW_YAMLCPP yaml-cpp>=0.5)
-if(NEW_YAMLCPP_FOUND)
-  add_definitions(-DHAVE_NEW_YAMLCPP)
-endif(NEW_YAMLCPP_FOUND)
-
-find_library(YAML yaml-cpp REQUIRED)
+pkg_check_modules(YAMLCPP REQUIRED yaml-cpp>=0.5)
+include_directories(${YAMLCPP_INCLUDE_DIRS})
+link_directories(${YAMLCPP_LIBRARY_DIRS})
 
 catkin_package(
   INCLUDE_DIRS
@@ -86,7 +86,7 @@ add_library(${PROJECT_NAME}_tools
 )
 set_target_properties(${PROJECT_NAME}_tools PROPERTIES VERSION ${${PROJECT_NAME}_VERSION})
 target_link_libraries(${PROJECT_NAME}_tools
-  ${YAML}
+  ${YAMLCPP_LIBRARIES}
   ${catkin_LIBRARIES}
   ${Boost_LIBRARIES}
   ${QT_LIBRARIES}

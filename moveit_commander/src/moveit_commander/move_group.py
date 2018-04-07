@@ -34,6 +34,7 @@
 
 from geometry_msgs.msg import Pose, PoseStamped
 from moveit_msgs.msg import RobotTrajectory, Grasp, PlaceLocation, Constraints
+from moveit_msgs.msg import MoveItErrorCodes, TrajectoryConstraints
 from sensor_msgs.msg import JointState
 import rospy
 import tf
@@ -389,6 +390,27 @@ class MoveGroupCommander(object):
         """ Specify that no path constraints are to be used during motion planning """
         self._g.clear_path_constraints()
 
+    def get_trajectory_constraints(self):
+        """ Get the actual trajectory constraints in form of a moveit_msgs.msgs.Constraints """
+        c = Constraints()
+        c_str = self._g.get_trajectory_constraints()
+        conversions.msg_from_string(c, c_str)
+        return c
+
+    def set_trajectory_constraints(self, value):
+        """ Specify the trajectory constraints to be used """
+        if value == None:
+            self.clear_trajectory_constraints()
+        else:
+            if type(value) is TrajectoryConstraints:
+                self._g.set_trajectory_constraints_from_msg(conversions.msg_to_string(value))
+            elif not self._g.set_trajectory_constraints(value):
+                raise MoveItCommanderException("Unable to set trajectory constraints " + value)
+
+    def clear_trajectory_constraints(self):
+        """ Specify that no trajectory constraints are to be used during motion planning """
+        self._g.clear_trajectory_constraints()
+
     def set_constraints_database(self, host, port):
         """ Specify which database to connect to for loading possible path constraints """
         self._g.set_constraints_database(host, port)
@@ -404,6 +426,10 @@ class MoveGroupCommander(object):
     def set_planner_id(self, planner_id):
         """ Specify which planner to use when motion planning """
         self._g.set_planner_id(planner_id)
+
+    def get_planner_id(self):
+        """ Get the current planner_id """
+        self._g.get_planner_id()
 
     def set_num_planning_attempts(self, num_planning_attempts):
         """ Set the number of times the motion plan is to be computed from scratch before the shortest solution is returned. The default value is 1. """

@@ -40,6 +40,7 @@
 
 #include <moveit/robot_model/robot_model.h>
 #include <moveit/robot_state/attached_body.h>
+#include <moveit/macros/deprecation.h>
 #include <sensor_msgs/JointState.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <std_msgs/ColorRGBA.h>
@@ -524,7 +525,7 @@ public:
   {
     if (has_acceleration_)
     {
-      logError("Unable to set joint efforts because array is being used for accelerations");
+      CONSOLE_BRIDGE_logError("Unable to set joint efforts because array is being used for accelerations");
       return;
     }
     has_effort_ = true;
@@ -1296,7 +1297,14 @@ as the new values that correspond to the group */
   /** \brief Update all transforms. */
   void update(bool force = false);
 
-  /** \brief Update the state after setting a particular link to the input global transform pose.*/
+  /** \brief Update the state after setting a particular link to the input global transform pose.
+
+      This "warps" the given link to the given pose, neglecting the joint values of its parent joint.
+      The link transforms of link and all its descendants are updated, but not marked as dirty,
+      although they do not match the joint values anymore!
+      Collision body transforms are not yet updated, but marked dirty only.
+      Use update(false) or updateCollisionBodyTransforms() to update them as well.
+   */
   void updateStateWithLinkAt(const std::string& link_name, const Eigen::Affine3d& transform, bool backward = false)
   {
     updateStateWithLinkAt(robot_model_->getLinkModel(link_name), transform, backward);
@@ -1596,11 +1604,11 @@ as the new values that correspond to the group */
   /** @} */
 
   /** \brief Compute an axis-aligned bounding box that contains the current state.
-      The format for \e aabb is (minx, miny, minz, maxx, maxy, maxz) */
+      The format for \e aabb is (minx, maxx, miny, maxy, minz, maxz) */
   void computeAABB(std::vector<double>& aabb) const;
 
   /** \brief Compute an axis-aligned bounding box that contains the current state.
-      The format for \e aabb is (minx, miny, minz, maxx, maxy, maxz) */
+      The format for \e aabb is (minx, maxx, miny, maxy, minz, maxz) */
   void computeAABB(std::vector<double>& aabb)
   {
     updateLinkTransforms();
@@ -1713,20 +1721,36 @@ private:
     for (std::size_t i = 0; i < mim.size(); ++i)
     {
       position_[mim[i]->getFirstVariableIndex()] = mim[i]->getMimicFactor() * v + mim[i]->getMimicOffset();
-      dirty_joint_transforms_[mim[i]->getJointIndex()] = 1;
+      markDirtyJointTransforms(mim[i]);
     }
   }
 
   /** \brief Update a set of joints that are certain to be mimicking other joints */
-  void updateMimicJoint(const std::vector<const JointModel*>& mim)
+  /* use updateMimicJoints() instead, which also marks joints dirty */
+  MOVEIT_DEPRECATED void updateMimicJoint(const std::vector<const JointModel*>& mim)
   {
     for (std::size_t i = 0; i < mim.size(); ++i)
     {
       const int fvi = mim[i]->getFirstVariableIndex();
       position_[fvi] =
           mim[i]->getMimicFactor() * position_[mim[i]->getMimic()->getFirstVariableIndex()] + mim[i]->getMimicOffset();
+      // Only mark joint transform dirty, but not the associated link transform
+      // as this function is always used in combination of
+      // updateMimicJoint(group->getMimicJointModels()) + markDirtyJointTransforms(group);
       dirty_joint_transforms_[mim[i]->getJointIndex()] = 1;
     }
+  }
+
+  /** \brief Update all mimic joints within group */
+  void updateMimicJoints(const JointModelGroup* group)
+  {
+    for (const JointModel* jm : group->getMimicJointModels())
+    {
+      const int fvi = jm->getFirstVariableIndex();
+      position_[fvi] = jm->getMimicFactor() * position_[jm->getMimic()->getFirstVariableIndex()] + jm->getMimicOffset();
+      markDirtyJointTransforms(jm);
+    }
+    markDirtyJointTransforms(group);
   }
 
   void updateLinkTransformsInternal(const JointModel* start);
@@ -1734,6 +1758,17 @@ private:
   void getMissingKeys(const std::map<std::string, double>& variable_map,
                       std::vector<std::string>& missing_variables) const;
   void getStateTreeJointString(std::ostream& ss, const JointModel* jm, const std::string& pfx0, bool last) const;
+
+  /**
+   * \brief Tests joint space jumps of a trajectory. First, the average distance between adjacent trajectory points is
+   * computed. If two adjacent trajectory points have distance > \e jump_threshold * average, the trajectory is cut of
+   * at this point.
+   * @param group The joint model group of the robot state.
+   * @param traj The trajectory that should be tested.
+   * @param jump_threshold The threshold to determine if a joint space jump has occurred .
+   * @return The fraction of the trajectory that passed.
+   */
+  double testJointSpaceJump(const JointModelGroup* group, std::vector<RobotStatePtr>& traj, double jump_threshold);
 
   /** \brief This function is only called in debug mode */
   bool checkJointTransforms(const JointModel* joint) const;

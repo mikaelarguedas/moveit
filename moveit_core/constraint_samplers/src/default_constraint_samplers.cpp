@@ -61,7 +61,7 @@ bool constraint_samplers::JointConstraintSampler::configure(
 
   if (!jmg_)
   {
-    logError("NULL group specified for constraint sampler");
+    CONSOLE_BRIDGE_logError("NULL group specified for constraint sampler");
     return false;
   }
 
@@ -91,16 +91,16 @@ bool constraint_samplers::JointConstraintSampler::configure(
         std::max(joint_bounds.min_position_, jc[i].getDesiredJointPosition() - jc[i].getJointToleranceBelow()),
         std::min(joint_bounds.max_position_, jc[i].getDesiredJointPosition() + jc[i].getJointToleranceAbove()));
 
-    logDebug("Bounds for %s JointConstraint are %g %g", jc[i].getJointVariableName().c_str(), ji.min_bound_,
-             ji.max_bound_);
+    CONSOLE_BRIDGE_logDebug("Bounds for %s JointConstraint are %g %g", jc[i].getJointVariableName().c_str(),
+                            ji.min_bound_, ji.max_bound_);
 
     if (ji.min_bound_ > ji.max_bound_ + std::numeric_limits<double>::epsilon())
     {
       std::stringstream cs;
       jc[i].print(cs);
-      logError("The constraints for joint '%s' are such that there are no possible values for the joint: min_bound: "
-               "%g, max_bound: %g. Failing.\n",
-               jm->getName().c_str(), ji.min_bound_, ji.max_bound_);
+      CONSOLE_BRIDGE_logError("The constraints for joint '%s' are such that there are no possible values for the "
+                              "joint: min_bound: %g, max_bound: %g. Failing.\n",
+                              jm->getName().c_str(), ji.min_bound_, ji.max_bound_);
       clear();
       return false;
     }
@@ -109,7 +109,7 @@ bool constraint_samplers::JointConstraintSampler::configure(
 
   if (!some_valid_constraint)
   {
-    logWarn("No valid joint constraints");
+    CONSOLE_BRIDGE_logWarn("No valid joint constraints");
     return false;
   }
 
@@ -151,7 +151,7 @@ bool constraint_samplers::JointConstraintSampler::sample(robot_state::RobotState
 {
   if (!is_valid_)
   {
-    logWarn("JointConstraintSampler not configured, won't sample");
+    CONSOLE_BRIDGE_logWarn("JointConstraintSampler not configured, won't sample");
     return false;
   }
 
@@ -232,6 +232,8 @@ void constraint_samplers::IKConstraintSampler::clear()
   kb_.reset();
   ik_frame_ = "";
   transform_ik_ = false;
+  eef_to_ik_tip_transform_ = Eigen::Affine3d::Identity();
+  need_eef_to_ik_tip_transform_ = false;
 }
 
 bool constraint_samplers::IKConstraintSampler::configure(const IKSamplingPose& sp)
@@ -244,7 +246,7 @@ bool constraint_samplers::IKConstraintSampler::configure(const IKSamplingPose& s
       (sp.position_constraint_ && sp.orientation_constraint_ && !sp.position_constraint_->enabled() &&
        !sp.orientation_constraint_->enabled()))
   {
-    logWarn("No enabled constraints in sampling pose");
+    CONSOLE_BRIDGE_logWarn("No enabled constraints in sampling pose");
     return false;
   }
 
@@ -254,8 +256,8 @@ bool constraint_samplers::IKConstraintSampler::configure(const IKSamplingPose& s
     if (sampling_pose_.position_constraint_->getLinkModel()->getName() !=
         sampling_pose_.orientation_constraint_->getLinkModel()->getName())
     {
-      logError("Position and orientation constraints need to be specified for the same link in order to use IK-based "
-               "sampling");
+      CONSOLE_BRIDGE_logError("Position and orientation constraints need to be specified for the same link in "
+                              "order to use IK-based sampling");
       return false;
     }
 
@@ -266,7 +268,7 @@ bool constraint_samplers::IKConstraintSampler::configure(const IKSamplingPose& s
   kb_ = jmg_->getSolverInstance();
   if (!kb_)
   {
-    logWarn("No solver instance in setup");
+    CONSOLE_BRIDGE_logWarn("No solver instance in setup");
     is_valid_ = false;
     return false;
   }
@@ -338,7 +340,7 @@ bool constraint_samplers::IKConstraintSampler::loadIKSolver()
 {
   if (!kb_)
   {
-    logError("No IK solver");
+    CONSOLE_BRIDGE_logError("No IK solver");
     return false;
   }
 
@@ -350,9 +352,9 @@ bool constraint_samplers::IKConstraintSampler::loadIKSolver()
   if (transform_ik_)
     if (!jmg_->getParentModel().hasLinkModel(ik_frame_))
     {
-      logError("The IK solver expects requests in frame '%s' but this frame is not known to the sampler. Ignoring "
-               "transformation (IK may fail)",
-               ik_frame_.c_str());
+      CONSOLE_BRIDGE_logError("The IK solver expects requests in frame '%s' but this frame is not known to the "
+                              "sampler. Ignoring transformation (IK may fail)",
+                              ik_frame_.c_str());
       transform_ik_ = false;
     }
 
@@ -368,8 +370,8 @@ bool constraint_samplers::IKConstraintSampler::loadIKSolver()
       for (moveit::core::LinkTransformMap::const_iterator it = fixed_links.begin(); it != fixed_links.end(); ++it)
         if (moveit::core::Transforms::sameFrame(it->first->getName(), kb_->getTipFrame()))
         {
-          sampling_pose_.position_constraint_->swapLinkModel(jmg_->getParentModel().getLinkModel(it->first->getName()),
-                                                             it->second);
+          eef_to_ik_tip_transform_ = it->second;
+          need_eef_to_ik_tip_transform_ = true;
           wrong_link = false;
           break;
         }
@@ -386,8 +388,8 @@ bool constraint_samplers::IKConstraintSampler::loadIKSolver()
       for (moveit::core::LinkTransformMap::const_iterator it = fixed_links.begin(); it != fixed_links.end(); ++it)
         if (moveit::core::Transforms::sameFrame(it->first->getName(), kb_->getTipFrame()))
         {
-          sampling_pose_.orientation_constraint_->swapLinkModel(
-              jmg_->getParentModel().getLinkModel(it->first->getName()), it->second.rotation());
+          eef_to_ik_tip_transform_ = it->second;
+          need_eef_to_ik_tip_transform_ = true;
           wrong_link = false;
           break;
         }
@@ -396,11 +398,11 @@ bool constraint_samplers::IKConstraintSampler::loadIKSolver()
 
   if (wrong_link)
   {
-    logError("IK cannot be performed for link '%s'. The solver can report IK solutions for link '%s'.",
-             sampling_pose_.position_constraint_ ?
-                 sampling_pose_.position_constraint_->getLinkModel()->getName().c_str() :
-                 sampling_pose_.orientation_constraint_->getLinkModel()->getName().c_str(),
-             kb_->getTipFrame().c_str());
+    CONSOLE_BRIDGE_logError("IK cannot be performed for link '%s'. The solver can report IK solutions for link '%s'.",
+                            sampling_pose_.position_constraint_ ?
+                                sampling_pose_.position_constraint_->getLinkModel()->getName().c_str() :
+                                sampling_pose_.orientation_constraint_->getLinkModel()->getName().c_str(),
+                            kb_->getTipFrame().c_str());
     return false;
   }
   return true;
@@ -412,7 +414,8 @@ bool constraint_samplers::IKConstraintSampler::samplePose(Eigen::Vector3d& pos, 
   if (ks.dirtyLinkTransforms())
   {
     // samplePose below requires accurate transforms
-    logError("IKConstraintSampler received dirty robot state, but valid transforms are required. Failing.");
+    CONSOLE_BRIDGE_logError("IKConstraintSampler received dirty robot state, but valid transforms are required. "
+                            "Failing.");
     return false;
   }
 
@@ -431,14 +434,14 @@ bool constraint_samplers::IKConstraintSampler::samplePose(Eigen::Vector3d& pos, 
         }
       if (!found)
       {
-        logError("Unable to sample a point inside the constraint region");
+        CONSOLE_BRIDGE_logError("Unable to sample a point inside the constraint region");
         return false;
       }
     }
     else
     {
-      logError("Unable to sample a point inside the constraint region. Constraint region is empty when it should not "
-               "be.");
+      CONSOLE_BRIDGE_logError("Unable to sample a point inside the constraint region. "
+                              "Constraint region is empty when it should not be.");
       return false;
     }
 
@@ -495,18 +498,6 @@ bool constraint_samplers::IKConstraintSampler::samplePose(Eigen::Vector3d& pos, 
     // the rotation matrix that corresponds to the desired orientation
     pos = pos - quat.toRotationMatrix() * sampling_pose_.position_constraint_->getLinkOffset();
 
-  // we now have the transform we wish to perform IK for, in the planning frame
-
-  if (transform_ik_)
-  {
-    // we need to convert this transform to the frame expected by the IK solver
-    // both the planning frame and the frame for the IK are assumed to be robot links
-    Eigen::Affine3d ikq(Eigen::Translation3d(pos) * quat.toRotationMatrix());
-    ikq = ks.getFrameTransform(ik_frame_).inverse() * ikq;
-    pos = ikq.translation();
-    quat = Eigen::Quaterniond(ikq.rotation());
-  }
-
   return true;
 }
 
@@ -544,7 +535,7 @@ bool constraint_samplers::IKConstraintSampler::sampleHelper(robot_state::RobotSt
 {
   if (!is_valid_)
   {
-    logWarn("IKConstraintSampler not configured, won't sample");
+    CONSOLE_BRIDGE_logWarn("IKConstraintSampler not configured, won't sample");
     return false;
   }
 
@@ -561,8 +552,28 @@ bool constraint_samplers::IKConstraintSampler::sampleHelper(robot_state::RobotSt
     if (!samplePose(point, quat, reference_state, max_attempts))
     {
       if (verbose_)
-        logInform("IK constraint sampler was unable to produce a pose to run IK for");
+        CONSOLE_BRIDGE_logInform("IK constraint sampler was unable to produce a pose to run IK for");
       return false;
+    }
+
+    // we now have the transform we wish to perform IK for, in the planning frame
+    if (transform_ik_)
+    {
+      // we need to convert this transform to the frame expected by the IK solver
+      // both the planning frame and the frame for the IK are assumed to be robot links
+      Eigen::Affine3d ikq(Eigen::Translation3d(point) * quat.toRotationMatrix());
+      ikq = reference_state.getFrameTransform(ik_frame_).inverse() * ikq;
+      point = ikq.translation();
+      quat = Eigen::Quaterniond(ikq.rotation());
+    }
+
+    if (need_eef_to_ik_tip_transform_)
+    {
+      // After sampling the pose needs to be transformed to the ik chain tip
+      Eigen::Affine3d ikq(Eigen::Translation3d(point) * quat.toRotationMatrix());
+      ikq = ikq * eef_to_ik_tip_transform_;
+      point = ikq.translation();
+      quat = Eigen::Quaterniond(ikq.rotation());
     }
 
     geometry_msgs::Pose ik_query;
@@ -632,9 +643,9 @@ bool constraint_samplers::IKConstraintSampler::callIK(
     if (error.val != moveit_msgs::MoveItErrorCodes::NO_IK_SOLUTION &&
         error.val != moveit_msgs::MoveItErrorCodes::INVALID_ROBOT_STATE &&
         error.val != moveit_msgs::MoveItErrorCodes::TIMED_OUT)
-      logError("IK solver failed with error %d", error.val);
+      CONSOLE_BRIDGE_logError("IK solver failed with error %d", error.val);
     else if (verbose_)
-      logInform("IK failed");
+      CONSOLE_BRIDGE_logInform("IK failed");
   }
   return false;
 }

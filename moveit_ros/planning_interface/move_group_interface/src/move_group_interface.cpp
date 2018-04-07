@@ -393,6 +393,11 @@ public:
     planner_id_ = planner_id;
   }
 
+  const std::string& getPlannerId() const
+  {
+    return planner_id_;
+  }
+
   void setNumPlanningAttempts(unsigned int num_planning_attempts)
   {
     num_planning_attempts_ = num_planning_attempts;
@@ -746,6 +751,10 @@ public:
 
   MoveItErrorCode planGraspsAndPick(const std::string& object)
   {
+    if (object.empty())
+    {
+      return planGraspsAndPick(moveit_msgs::CollisionObject());
+    }
     moveit::planning_interface::PlanningSceneInterface psi;
 
     std::map<std::string, moveit_msgs::CollisionObject> objects = psi.getObjects(std::vector<std::string>(1, object));
@@ -941,6 +950,7 @@ public:
     req.jump_threshold = jump_threshold;
     req.path_constraints = path_constraints;
     req.avoid_collisions = avoid_collisions;
+    req.link_name = getEndEffectorLink();
 
     if (cartesian_path_service_.call(req, res))
     {
@@ -1139,6 +1149,8 @@ public:
 
     if (path_constraints_)
       request.path_constraints = *path_constraints_;
+    if (trajectory_constraints_)
+      request.trajectory_constraints = *trajectory_constraints_;
   }
 
   void constructGoal(moveit_msgs::MoveGroupGoal& goal)
@@ -1208,6 +1220,16 @@ public:
     path_constraints_.reset();
   }
 
+  void setTrajectoryConstraints(const moveit_msgs::TrajectoryConstraints& constraint)
+  {
+    trajectory_constraints_.reset(new moveit_msgs::TrajectoryConstraints(constraint));
+  }
+
+  void clearTrajectoryConstraints()
+  {
+    trajectory_constraints_.reset();
+  }
+
   std::vector<std::string> getKnownConstraints() const
   {
     while (initializing_constraints_)
@@ -1229,6 +1251,14 @@ public:
       return *path_constraints_;
     else
       return moveit_msgs::Constraints();
+  }
+
+  moveit_msgs::TrajectoryConstraints getTrajectoryConstraints() const
+  {
+    if (trajectory_constraints_)
+      return *trajectory_constraints_;
+    else
+      return moveit_msgs::TrajectoryConstraints();
   }
 
   void initializeConstraintsStorage(const std::string& host, unsigned int port)
@@ -1308,6 +1338,7 @@ private:
   // common properties for goals
   ActiveTargetType active_target_;
   std::unique_ptr<moveit_msgs::Constraints> path_constraints_;
+  std::unique_ptr<moveit_msgs::TrajectoryConstraints> trajectory_constraints_;
   std::string end_effector_link_;
   std::string pose_reference_frame_;
   std::string support_surface_;
@@ -1361,6 +1392,26 @@ moveit::planning_interface::MoveGroupInterface::MoveGroupInterface(
 moveit::planning_interface::MoveGroupInterface::~MoveGroupInterface()
 {
   delete impl_;
+}
+
+moveit::planning_interface::MoveGroupInterface::MoveGroupInterface(MoveGroupInterface&& other)
+  : remembered_joint_values_(std::move(other.remembered_joint_values_)), impl_(other.impl_)
+{
+  other.impl_ = nullptr;
+}
+
+moveit::planning_interface::MoveGroupInterface& moveit::planning_interface::MoveGroupInterface::
+operator=(MoveGroupInterface&& other)
+{
+  if (this != &other)
+  {
+    delete impl_;
+    impl_ = std::move(other.impl_);
+    remembered_joint_values_ = std::move(other.remembered_joint_values_);
+    other.impl_ = nullptr;
+  }
+
+  return *this;
 }
 
 const std::string& moveit::planning_interface::MoveGroupInterface::getName() const
@@ -1421,6 +1472,11 @@ std::string moveit::planning_interface::MoveGroupInterface::getDefaultPlannerId(
 void moveit::planning_interface::MoveGroupInterface::setPlannerId(const std::string& planner_id)
 {
   impl_->setPlannerId(planner_id);
+}
+
+const std::string& moveit::planning_interface::MoveGroupInterface::getPlannerId() const
+{
+  return impl_->getPlannerId();
 }
 
 void moveit::planning_interface::MoveGroupInterface::setNumPlanningAttempts(unsigned int num_planning_attempts)
@@ -2102,10 +2158,10 @@ unsigned int moveit::planning_interface::MoveGroupInterface::getVariableCount() 
   return impl_->getJointModelGroup()->getVariableCount();
 }
 
-robot_state::RobotStatePtr moveit::planning_interface::MoveGroupInterface::getCurrentState()
+robot_state::RobotStatePtr moveit::planning_interface::MoveGroupInterface::getCurrentState(double wait)
 {
   robot_state::RobotStatePtr current_state;
-  impl_->getCurrentState(current_state);
+  impl_->getCurrentState(current_state, wait);
   return current_state;
 }
 
@@ -2153,6 +2209,22 @@ void moveit::planning_interface::MoveGroupInterface::setPathConstraints(const mo
 void moveit::planning_interface::MoveGroupInterface::clearPathConstraints()
 {
   impl_->clearPathConstraints();
+}
+
+moveit_msgs::TrajectoryConstraints moveit::planning_interface::MoveGroupInterface::getTrajectoryConstraints() const
+{
+  return impl_->getTrajectoryConstraints();
+}
+
+void moveit::planning_interface::MoveGroupInterface::setTrajectoryConstraints(
+    const moveit_msgs::TrajectoryConstraints& constraint)
+{
+  impl_->setTrajectoryConstraints(constraint);
+}
+
+void moveit::planning_interface::MoveGroupInterface::clearTrajectoryConstraints()
+{
+  impl_->clearTrajectoryConstraints();
 }
 
 void moveit::planning_interface::MoveGroupInterface::setConstraintsDatabase(const std::string& host, unsigned int port)

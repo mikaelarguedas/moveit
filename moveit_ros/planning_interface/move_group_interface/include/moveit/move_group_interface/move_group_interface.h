@@ -63,18 +63,26 @@ public:
   MoveItErrorCode()
   {
     val = 0;
-  };
+  }
   MoveItErrorCode(int code)
   {
     val = code;
-  };
+  }
   MoveItErrorCode(const moveit_msgs::MoveItErrorCodes& code)
   {
     val = code.val;
-  };
-  operator bool() const
+  }
+  explicit operator bool() const
   {
     return val == moveit_msgs::MoveItErrorCodes::SUCCESS;
+  }
+  bool operator==(const int c) const
+  {
+    return val == c;
+  }
+  bool operator!=(const int c) const
+  {
+    return val != c;
   }
 };
 
@@ -156,6 +164,17 @@ public:
 
   ~MoveGroupInterface();
 
+  /**
+   * @brief This class owns unique resources (e.g. action clients, threads) and its not very
+   * meaningful to copy. Pass by references, move it, or simply create multiple instances where
+   * required.
+   */
+  MoveGroupInterface(const MoveGroupInterface&) = delete;
+  MoveGroupInterface& operator=(const MoveGroupInterface&) = delete;
+
+  MoveGroupInterface(MoveGroupInterface&& other);
+  MoveGroupInterface& operator=(MoveGroupInterface&& other);
+
   /** \brief Get the name of the group this instance operates on */
   const std::string& getName() const;
 
@@ -206,6 +225,9 @@ public:
 
   /** \brief Specify a planner to be used for further planning */
   void setPlannerId(const std::string& planner_id);
+
+  /** \brief Get the current planner_id */
+  const std::string& getPlannerId() const;
 
   /** \brief Specify the maximum amount of time to use when planning */
   void setPlanningTime(double seconds);
@@ -745,7 +767,7 @@ public:
   /** \brief Pick up an object
 
       calls the external moveit_msgs::GraspPlanning service "plan_grasps" to compute possible grasps */
-  MoveItErrorCode planGraspsAndPick(const std::string& object);
+  MoveItErrorCode planGraspsAndPick(const std::string& object = "");
 
   /** \brief Pick up an object
 
@@ -806,8 +828,8 @@ public:
   /** \brief Get the current joint values for the joints planned for by this instance (see getJoints()) */
   std::vector<double> getCurrentJointValues();
 
-  /** \brief Get the current state of the robot */
-  robot_state::RobotStatePtr getCurrentState();
+  /** \brief Get the current state of the robot within the duration specified by wait. */
+  robot_state::RobotStatePtr getCurrentState(double wait = 1);
 
   /** \brief Get the pose for the end-effector \e end_effector_link.
       If \e end_effector_link is empty (the default value) then the end-effector reported by getEndEffectorLink() is
@@ -886,6 +908,10 @@ public:
   /** \brief Specify that no path constraints are to be used.
       This removes any path constraints set in previous calls to setPathConstraints(). */
   void clearPathConstraints();
+
+  moveit_msgs::TrajectoryConstraints getTrajectoryConstraints() const;
+  void setTrajectoryConstraints(const moveit_msgs::TrajectoryConstraints& constraint);
+  void clearTrajectoryConstraints();
 
   /**@}*/
 

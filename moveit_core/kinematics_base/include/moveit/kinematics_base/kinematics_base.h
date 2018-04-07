@@ -40,8 +40,10 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <moveit_msgs/MoveItErrorCodes.h>
 #include <moveit/macros/class_forward.h>
-#include <boost/function.hpp>
+#include <ros/node_handle.h>
 #include <console_bridge/console.h>
+
+#include <boost/function.hpp>
 #include <string>
 
 namespace moveit
@@ -313,7 +315,8 @@ public:
     }
 
     // Otherwise throw error because this function should have been implemented
-    logError("moveit.kinematics_base: This kinematic solver does not support searchPositionIK with multiple poses");
+    CONSOLE_BRIDGE_logError("moveit.kinematics_base: This kinematic solver "
+                            "does not support searchPositionIK with multiple poses");
     return false;
   }
 
@@ -390,8 +393,8 @@ public:
       return initialize(robot_description, group_name, base_frame, tip_frames[0], search_discretization);
     }
 
-    logError("moveit.kinematics_base: This kinematic solver does not support initialization with more than one tip "
-             "frames");
+    CONSOLE_BRIDGE_logError("moveit.kinematics_base: This kinematic solver "
+                            "does not support initialization with more than one tip frames");
     return false;
   }
 
@@ -424,7 +427,8 @@ public:
   virtual const std::string& getTipFrame() const
   {
     if (tip_frames_.size() > 1)
-      logError("moveit.kinematics_base: This kinematic solver has more than one tip frame, do not call getTipFrame()");
+      CONSOLE_BRIDGE_logError("moveit.kinematics_base: This kinematic solver has more than one tip frame, "
+                              "do not call getTipFrame()");
 
     return tip_frame_;  // for backwards-compatibility. should actually use tip_frames_[0]
   }
@@ -597,6 +601,53 @@ protected:
   std::vector<unsigned int> redundant_joint_indices_;
   std::map<int, double> redundant_joint_discretization_;
   std::vector<DiscretizationMethod> supported_methods_;
+
+  /**
+   * @brief Enables kinematics plugins access to parameters that are defined
+   * for the private namespace and inside 'robot_description_kinematics'.
+   * Parameters are searched in the following locations and order
+   *
+   * ~/<group_name>/<param>
+   * ~/<param>
+   * robot_description_kinematics/<group_name>/<param>
+   * robot_description_kinematics/<param>
+   *
+   * This order maintains default behavior by keeping the private namespace
+   * as the predominant configuration but also allows groupwise specifications.
+   */
+  template <typename T>
+  inline bool lookupParam(const std::string& param, T& val, const T& default_val) const
+  {
+    ros::NodeHandle pnh("~");
+    if (pnh.hasParam(group_name_ + "/" + param))
+    {
+      val = pnh.param(group_name_ + "/" + param, default_val);
+      return true;
+    }
+
+    if (pnh.hasParam(param))
+    {
+      val = pnh.param(param, default_val);
+      return true;
+    }
+
+    ros::NodeHandle nh;
+    if (nh.hasParam("robot_description_kinematics/" + group_name_ + "/" + param))
+    {
+      val = nh.param("robot_description_kinematics/" + group_name_ + "/" + param, default_val);
+      return true;
+    }
+
+    if (nh.hasParam("robot_description_kinematics/" + param))
+    {
+      val = nh.param("robot_description_kinematics/" + param, default_val);
+      return true;
+    }
+
+    val = default_val;
+
+    return false;
+  }
 
 private:
   std::string removeSlash(const std::string& str) const;

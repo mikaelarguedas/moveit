@@ -133,9 +133,10 @@ MotionPlanningDisplay::MotionPlanningDisplay()
   query_goal_state_property_ =
       new rviz::BoolProperty("Query Goal State", true, "Shows the goal state for the motion planning query",
                              plan_category_, SLOT(changedQueryGoalState()), this);
-  query_marker_scale_property_ = new rviz::FloatProperty(
-      "Interactive Marker Size", 0.0f, "Specifies scale of the interactive marker overlayed on the robot",
-      plan_category_, SLOT(changedQueryMarkerScale()), this);
+  query_marker_scale_property_ =
+      new rviz::FloatProperty("Interactive Marker Size", 0.0f,
+                              "Specifies scale of the interactive marker overlayed on the robot. 0 is auto scale.",
+                              plan_category_, SLOT(changedQueryMarkerScale()), this);
   query_marker_scale_property_->setMin(0.0f);
 
   query_start_color_property_ =
@@ -186,6 +187,8 @@ MotionPlanningDisplay::~MotionPlanningDisplay()
 
   delete text_to_display_;
   delete int_marker_display_;
+  if (frame_dock_)
+    delete frame_dock_;
 }
 
 void MotionPlanningDisplay::onInitialize()
@@ -307,8 +310,12 @@ void MotionPlanningDisplay::reset()
 void MotionPlanningDisplay::setName(const QString& name)
 {
   BoolProperty::setName(name);
-  frame_dock_->setWindowTitle(name);
-  frame_dock_->setObjectName(name);
+  if (frame_dock_)
+  {
+    frame_dock_->setWindowTitle(name);
+    frame_dock_->setObjectName(name);
+  }
+  trajectory_visual_->setName(name);
 }
 
 void MotionPlanningDisplay::backgroundJobUpdate(moveit::tools::BackgroundProcessing::JobEvent, const std::string&)
@@ -1233,6 +1240,9 @@ void MotionPlanningDisplay::onEnable()
 
   int_marker_display_->setEnabled(true);
   int_marker_display_->setFixedFrame(fixed_frame_);
+
+  if (frame_ && frame_->parentWidget())
+    frame_->parentWidget()->show();
 }
 
 // ******************************************************************************************
@@ -1252,6 +1262,9 @@ void MotionPlanningDisplay::onDisable()
 
   // Planned Path Display
   trajectory_visual_->onDisable();
+
+  if (frame_ && frame_->parentWidget())
+    frame_->parentWidget()->hide();
 }
 
 // ******************************************************************************************
